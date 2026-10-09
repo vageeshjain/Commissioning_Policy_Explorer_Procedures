@@ -3,9 +3,7 @@ import pandas as pd
 
 st.set_page_config(layout="wide")
 
-xls = pd.ExcelFile(
-    r"C:\Users\vjain\Documents\app.py\EBI_RV_v3.xlsx"
-)
+xls = pd.ExcelFile("EBI_RV_v3.xlsx")
 df = pd.read_excel(xls, sheet_name=0)
 ri_df = pd.read_excel(
     xls,
