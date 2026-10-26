@@ -264,8 +264,6 @@ elif page == "National Dashboard":
 
     dashboard_df = var_df.copy()
 
-    # This 'if' block only runs if the checkbox is checked (True). 
-    # Since value=False, this code is skipped entirely and all 163 rows flow through!
     if show_only_variable:
         dashboard_df = dashboard_df[
             (
@@ -278,3 +276,72 @@ elif page == "National Dashboard":
                 & (dashboard_df["IFR %"] < 100)
             )
         ]
+
+    a, b, c, d, e, f = st.columns(6)
+
+    a.metric(
+        "Procedures",
+        len(dashboard_df)
+    )
+
+    b.metric(
+        "ICBs",
+        len(icb_cols)
+    )
+
+    c.metric(
+        "Mean FWC %",
+        f"{round(dashboard_df['FWC %'].mean(),1)}%"
+    )
+
+    d.metric(
+        "Mean IFR %",
+        f"{round(dashboard_df['IFR %'].mean(),1)}%"
+    )
+
+    e.metric(
+        "Mean Other %",
+        f"{round(dashboard_df['Other %'].mean(),1)}%"
+    )
+
+    f.metric(
+        "Mean No Policy %",
+        f"{round(dashboard_df['No Policy %'].mean(),1)}%"
+    )
+
+    st.subheader("Highest IFR Procedures")
+    st.caption(
+        "Ranked by percentage of all 42 ICBs designating the procedure as IFR. Procedures tied at the cut-off are included."
+    )
+    st.dataframe(
+        top_n_with_ties(
+            dashboard_df,
+            "IFR %",
+            20
+        ),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.subheader("Highest FWC Procedures")
+    st.caption(
+        "Ranked by percentage of all 42 ICBs designating the procedure as Funded With Criteria (FWC). Procedures tied at the cut-off are included."
+    )
+    st.dataframe(
+        dashboard_df
+        .sort_values(
+            "FWC %",
+            ascending=False
+        )
+        .head(20),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.subheader("All Procedures")
+    st.dataframe(
+        dashboard_df
+        .sort_values("Procedure"),
+        use_container_width=True,
+        hide_index=True
+    )
