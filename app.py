@@ -45,6 +45,10 @@ for col in icb_cols:
         .replace(status_map)
         .fillna("No Policy Listed")
     )
+st.write("Rows loaded:", len(df))
+st.write("Columns:", df.columns.tolist())
+st.write(df.head())
+st.write(df.tail())
 
 procedures = ["All"] + sorted(
     df[procedure_col]
