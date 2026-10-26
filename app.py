@@ -3,70 +3,54 @@ import pandas as pd
 
 st.set_page_config(layout="wide")
 
-xls = pd.ExcelFile("EBI_RV_v3.xlsx")
-df = pd.read_excel(xls, sheet_name=0)
-ri_df = pd.read_excel(
+xls = pd.ExcelFile("EBI_RV_v5_suppfile2_tableonly.xlsx")
+
+raw = pd.read_excel(
     xls,
-    sheet_name="RI and CVI",
-    header=None
+    sheet_name=0,
+    header=0
 )
 
-ri_df = ri_df.iloc[:, 2:10]
+procedure_col = raw.columns[0]
 
-ri_df.columns = [
-    "Procedure",
-    "FWC",
-    "IFR",
-    "Other",
-    "Documentation Completeness",
-    "Restriction Index",
-    "All-ICB CVI",
-    "Decision-based CVI"
+count_cols = [
+    "EBI (criteria)",
+    "EBI (do not fund)",
+    "Not in EBI",
+    "Signpost to national guidance",
+    "Under Review",
+    "Total"
 ]
 
-ri_df = ri_df.iloc[2:].reset_index(drop=True)
-
-ri_df = ri_df[
-    ri_df["Procedure"].notna()
+icb_cols = [
+    c for c in raw.columns
+    if c not in [procedure_col] + count_cols
 ]
 
-ri_df["Restriction Index"] = pd.to_numeric(
-    ri_df["Restriction Index"],
-    errors="coerce"
-)
+status_map = {
+    "✓": "FWC",
+    "IFR": "IFR",
+    "NG": "Other (Signpost / Under Review)",
+    "UR": "Other (Signpost / Under Review)",
+    "N/A": "No Policy Listed"
+}
 
-ri_df["All-ICB CVI"] = pd.to_numeric(
-    ri_df["All-ICB CVI"],
-    errors="coerce"
-)
+df = raw.copy()
 
-ri_df["Decision-based CVI"] = pd.to_numeric(
-    ri_df["Decision-based CVI"],
-    errors="coerce"
-)
+df = df[df[procedure_col].notna()].copy()
 
-ri_df["Documentation Completeness"] = pd.to_numeric(
-    ri_df["Documentation Completeness"],
-    errors="coerce"
-)
-procedure_col = df.columns[0]
-icb_cols = df.columns[1:43]
+for col in icb_cols:
+    df[col] = (
+        df[col]
+        .replace(status_map)
+        .fillna("No Policy Listed")
+    )
 
-df = df.replace("ü", "FWC")
-df = df.replace("✓", "FWC")
-
-df[procedure_col] = (
+procedures = ["All"] + sorted(
     df[procedure_col]
     .astype(str)
-    .str.strip()
+    .tolist()
 )
-
-procedures = [
-    x for x in df[procedure_col].dropna().unique().tolist()
-    if "%" not in str(x)
-]
-
-procedures = ["All"] + sorted(procedures)
 
 icbs = ["All"] + list(icb_cols)
 
@@ -74,9 +58,21 @@ statuses = [
     "All",
     "FWC",
     "IFR",
-    "Policy under review",
+    "Other (Signpost / Under Review)",
     "No Policy Listed"
 ]
+
+def top_n_with_ties(df_in, sort_col, n=20):
+    ranked = df_in.sort_values(
+        sort_col,
+        ascending=False
+    )
+
+    cutoff = ranked.iloc[n - 1][sort_col]
+
+    return ranked[
+        ranked[sort_col] >= cutoff
+    ]
 
 if "page" not in st.session_state:
     st.session_state.page = "National Dashboard"
@@ -86,40 +82,67 @@ st.sidebar.markdown("## Navigation")
 if st.sidebar.button("📊 National Dashboard"):
     st.session_state.page = "National Dashboard"
 
-if st.sidebar.button("📈 Restriction Index & CVI"):
-    st.session_state.page = "Restriction Index & CVI"
-
 if st.sidebar.button("🔍 Policy Explorer"):
     st.session_state.page = "Policy Explorer"
 
 page = st.session_state.page
 
 st.title("NHS Commissioning Policy Explorer")
-st.markdown(
-"### A national dashboard of criteria-based procedure policies across English Integrated Care Boards"
-)
-with st.expander("About, Disclaimer and Citation"):
 
+st.markdown(
+    "### A national dashboard of criteria-based procedure policies across English Integrated Care Boards"
+)
+
+with st.expander("About, Disclaimer and Citation"):
     st.write(
         """
         **Disclaimer**
 
-        Data were extracted in 2025. Local commissioning policies may have changed since data collection. Users should verify current policies directly with the relevant Integrated Care Board before relying on the information presented.
+        Data were extracted in 2025. Local commissioning policies may have changed since data collection.
 
         **Citation**
 
-        For methods and data sources see:
-
-        Smyth et al. *Access to criteria-based procedures in the National Health Service in England: a comparative policy analysis*. BMJ Open, 2026.
+        Smyth et al. Access to criteria-based procedures in the National Health Service in England: a comparative policy analysis. BMJ Open, 2026.
 
         **Dashboard**
 
-        EBI Observatory. Interactive tool for exploring variation in commissioning policies, Restriction Index (RI) and Commissioning Variation Index (CVI) across English ICBs.
+        EBI Observatory. Interactive tool for exploring variation in commissioning policies across English Integrated Care Boards.
         """
     )
+
 with st.expander("Key"):
     st.write("FWC = Funded With Criteria")
     st.write("IFR = Individual Funding Request")
+    st.write("Other = Signpost to National Guidance or Policy Under Review")
+
+variation = []
+
+for _, row in df.iterrows():
+
+    variation.append({
+        "Procedure": row[procedure_col],
+        "FWC %": round(
+            row["EBI (criteria)"] / 42 * 100,
+            1
+        ),
+        "IFR %": round(
+            row["EBI (do not fund)"] / 42 * 100,
+            1
+        ),
+        "Other %": round(
+            (
+                row["Signpost to national guidance"]
+                + row["Under Review"]
+            ) / 42 * 100,
+            1
+        ),
+        "No Policy %": round(
+            row["Not in EBI"] / 42 * 100,
+            1
+        )
+    })
+
+var_df = pd.DataFrame(variation)
 
 if page == "Policy Explorer":
 
@@ -145,27 +168,25 @@ if page == "Policy Explorer":
 
     if selected_proc != "All" and selected_icb == "All":
 
-        row = df[df[procedure_col] == selected_proc].iloc[0]
+        row = df[
+            df[procedure_col] == selected_proc
+        ].iloc[0]
 
         result = pd.DataFrame({
             "ICB": icb_cols,
             "Status": [
-                "No Policy Listed" if pd.isna(row[x]) else row[x]
+                row[x]
                 for x in icb_cols
             ]
         })
 
         if selected_status != "All":
-            result = result[result["Status"] == selected_status]
-
-        total = len(result)
-
-        fwc = len(result[result["Status"] == "FWC"])
-        ifr = len(result[result["Status"] == "IFR"])
-        none = len(result[result["Status"] == "No Policy Listed"])
+            result = result[
+                result["Status"] == selected_status
+            ]
 
         st.dataframe(
-            result,
+            result.reset_index(drop=True),
             use_container_width=True
         )
 
@@ -176,20 +197,38 @@ if page == "Policy Explorer":
             "Status": df[selected_icb]
         })
 
-        result["Status"] = result["Status"].fillna(
-            "No Policy Listed"
-        )
-
         if selected_status != "All":
-            result = result[result["Status"] == selected_status]
+            result = result[
+                result["Status"] == selected_status
+            ]
 
         total = len(result)
 
-        fwc = len(result[result["Status"] == "FWC"])
-        ifr = len(result[result["Status"] == "IFR"])
-        none = len(result[result["Status"] == "No Policy Listed"])
+        fwc = len(
+            result[result["Status"] == "FWC"]
+        )
 
-        a, b, c = st.columns(3)
+        ifr = len(
+            result[result["Status"] == "IFR"]
+        )
+
+        other = len(
+            result[
+                result["Status"]
+                ==
+                "Other (Signpost / Under Review)"
+            ]
+        )
+
+        none = len(
+            result[
+                result["Status"]
+                ==
+                "No Policy Listed"
+            ]
+        )
+
+        a, b, c, d = st.columns(4)
 
         a.metric(
             "FWC",
@@ -202,72 +241,72 @@ if page == "Policy Explorer":
         )
 
         c.metric(
+            "Other",
+            f"{other} ({round(other/total*100,1)}%)"
+        )
+
+        d.metric(
             "No Policy",
             f"{none} ({round(none/total*100,1)}%)"
         )
 
         st.dataframe(
-            result,
+            result.reset_index(drop=True),
             use_container_width=True
         )
 
     elif selected_icb != "All" and selected_proc != "All":
 
-        row = df[df[procedure_col] == selected_proc].iloc[0]
+        row = df[
+            df[procedure_col] == selected_proc
+        ].iloc[0]
 
         value = row[selected_icb]
-
-        if pd.isna(value):
-            value = "No Policy Listed"
 
         st.subheader(selected_proc)
 
         if value == "FWC":
-            st.success("✅ Funded With Criteria (FWC)")
+            st.success(
+                "✅ Funded With Criteria (FWC)"
+            )
+
         elif value == "IFR":
-            st.warning("⚠️ Individual Funding Request (IFR)")
-        elif value == "Policy under review":
-            st.info("🔵 Policy Under Review")
+            st.warning(
+                "⚠️ Individual Funding Request (IFR)"
+            )
+
+        elif value == "Other (Signpost / Under Review)":
+            st.info(
+                "ℹ️ Signpost to National Guidance / Under Review"
+            )
+
         else:
-            st.error(f"❌ {value}")
+            st.error(
+                "❌ No Policy Listed"
+            )
 
 elif page == "National Dashboard":
-
-    variation = []
-
-    for _, row in df.iterrows():
-
-        vals = pd.Series(
-            [row[x] for x in icb_cols]
-        ).fillna("No Policy Listed")
-
-        total = len(vals)
-
-        variation.append({
-            "Procedure": row[procedure_col],
-            "FWC %": round(sum(vals == "FWC") / total * 100, 1),
-            "IFR %": round(sum(vals == "IFR") / total * 100, 1),
-            "No Policy %": round(sum(vals == "No Policy Listed") / total * 100, 1)
-        })
-
-    var_df = pd.DataFrame(variation)
 
     show_only_variable = st.checkbox(
         "Show only procedures with variation between ICBs",
         value=True
     )
 
+    dashboard_df = var_df.copy()
+
     if show_only_variable:
-        var_df = var_df[
-            (var_df["FWC %"] > 0)
-            & (var_df["FWC %"] < 100)
+
+        dashboard_df = dashboard_df[
+            (dashboard_df["FWC %"] > 0)
+            &
+            (dashboard_df["FWC %"] < 100)
         ]
 
-    a, b, c, d, e = st.columns(5)
+    a, b, c, d, e, f = st.columns(6)
 
     a.metric(
         "Procedures",
-        len(var_df)
+        len(dashboard_df)
     )
 
     b.metric(
@@ -277,131 +316,61 @@ elif page == "National Dashboard":
 
     c.metric(
         "Mean FWC %",
-        f"{round(var_df['FWC %'].mean(),1)}%"
+        f"{round(dashboard_df['FWC %'].mean(),1)}%"
     )
 
     d.metric(
         "Mean IFR %",
-        f"{round(var_df['IFR %'].mean(),1)}%"
+        f"{round(dashboard_df['IFR %'].mean(),1)}%"
     )
 
     e.metric(
+        "Mean Other %",
+        f"{round(dashboard_df['Other %'].mean(),1)}%"
+    )
+
+    f.metric(
         "Mean No Policy %",
-        f"{round(var_df['No Policy %'].mean(),1)}%"
+        f"{round(dashboard_df['No Policy %'].mean(),1)}%"
     )
 
     st.subheader("Highest IFR Procedures")
 
+    st.caption(
+        "Ranked by percentage of all 42 ICBs with an IFR policy. Procedures tied at the cut-off are included."
+    )
+
     st.dataframe(
-        var_df.sort_values(
+        top_n_with_ties(
+            dashboard_df,
             "IFR %",
-            ascending=False
-        ).head(20),
+            20
+        ).reset_index(drop=True),
         use_container_width=True
     )
 
     st.subheader("Highest FWC Procedures")
 
+    st.caption(
+        "Ranked by percentage of all 42 ICBs funding the procedure with criteria (FWC)."
+    )
+
     st.dataframe(
-        var_df.sort_values(
+        dashboard_df
+        .sort_values(
             "FWC %",
             ascending=False
-        ).head(20),
+        )
+        .head(20)
+        .reset_index(drop=True),
         use_container_width=True
     )
 
     st.subheader("All Procedures")
 
     st.dataframe(
-        var_df.sort_values(
-            "Procedure"
-        ),
-        use_container_width=True
-    )
-elif page == "Restriction Index & CVI":
-    st.subheader("Restriction Index & CVI")
-
-    procedure = st.selectbox(
-        "Procedure",
-        ["All"] + sorted(
-            ri_df["Procedure"]
-            .astype(str)
-            .unique()
-            .tolist()
-        )
-    )
-
-    if procedure != "All":
-
-        row = ri_df[
-            ri_df["Procedure"].astype(str)
-            == procedure
-        ].iloc[0]
-
-        a, b, c, d = st.columns(4)
-
-        a.metric(
-            "Restriction Index",
-            round(row["Restriction Index"], 2)
-            if pd.notna(row["Restriction Index"])
-            else "N/A"
-        )
-
-        b.metric(
-            "Documentation Completeness",
-            f"{round(row['Documentation Completeness'],1)}%"
-            if pd.notna(row["Documentation Completeness"])
-            else "N/A"
-        )
-
-        c.metric(
-            "All-ICB CVI",
-            f"{round(row['All-ICB CVI'],1)}%"
-            if pd.notna(row["All-ICB CVI"])
-            else "N/A"
-        )
-
-        d.metric(
-            "Decision-based CVI",
-            f"{round(row['Decision-based CVI'],1)}%"
-            if pd.notna(row["Decision-based CVI"])
-            else "N/A"
-        )
-
-    st.subheader("Most Restrictive Procedures")
-
-    st.dataframe(
-        ri_df[
-            ri_df["Restriction Index"].notna()
-        ]
-        .sort_values(
-            "Restriction Index",
-            ascending=False
-        )[
-            [
-                "Procedure",
-                "Restriction Index",
-                "Decision-based CVI"
-            ]
-        ],
-        use_container_width=True
-    )
-
-    st.subheader("Most Variable Procedures")
-
-    st.dataframe(
-        ri_df[
-            ri_df["Decision-based CVI"].notna()
-        ]
-        .sort_values(
-            "Decision-based CVI",
-            ascending=False
-        )[
-            [
-                "Procedure",
-                "Decision-based CVI",
-                "Restriction Index"
-            ]
-        ],
+        dashboard_df
+        .sort_values("Procedure")
+        .reset_index(drop=True),
         use_container_width=True
     )
