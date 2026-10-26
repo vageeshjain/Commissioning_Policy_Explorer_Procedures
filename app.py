@@ -3,6 +3,7 @@ import pandas as pd
 
 st.set_page_config(layout="wide")
 
+# Load Excel workbook
 xls = pd.ExcelFile("EBI_RV_v5_suppfile2_tableonly.xlsx")
 
 raw = pd.read_excel(
@@ -10,8 +11,7 @@ raw = pd.read_excel(
     sheet_name=0,
     header=0
 )
-st.write("RAW SHAPE", raw.shape)
-st.write(raw.head(20))
+
 procedure_col = raw.columns[0]
 
 count_cols = [
@@ -37,7 +37,6 @@ status_map = {
 }
 
 df = raw.copy()
-
 df = df[df[procedure_col].notna()].copy()
 
 for col in icb_cols:
@@ -46,10 +45,6 @@ for col in icb_cols:
         .replace(status_map)
         .fillna("No Policy Listed")
     )
-st.write("Rows loaded:", len(df))
-st.write("Columns:", df.columns.tolist())
-st.write(df.head())
-st.write(df.tail())
 
 procedures = ["All"] + sorted(
     df[procedure_col]
@@ -72,12 +67,10 @@ def top_n_with_ties(df_in, sort_col, n=20):
         sort_col,
         ascending=False
     )
-
-    cutoff = ranked.iloc[n - 1][sort_col]
-
-    return ranked[
-        ranked[sort_col] >= cutoff
-    ]
+    if len(ranked) >= n:
+        cutoff = ranked.iloc[n - 1][sort_col]
+        return ranked[ranked[sort_col] >= cutoff]
+    return ranked
 
 if "page" not in st.session_state:
     st.session_state.page = "National Dashboard"
@@ -93,7 +86,6 @@ if st.sidebar.button("🔍 Policy Explorer"):
 page = st.session_state.page
 
 st.title("NHS Commissioning Policy Explorer")
-
 st.markdown(
     "### A national dashboard of criteria-based procedure policies across English Integrated Care Boards"
 )
@@ -123,7 +115,6 @@ with st.expander("Key"):
 variation = []
 
 for _, row in df.iterrows():
-
     variation.append({
         "Procedure": row[procedure_col],
         "FWC %": round(
@@ -172,7 +163,6 @@ if page == "Policy Explorer":
         )
 
     if selected_proc != "All" and selected_icb == "All":
-
         row = df[
             df[procedure_col] == selected_proc
         ].iloc[0]
@@ -196,7 +186,6 @@ if page == "Policy Explorer":
         )
 
     elif selected_icb != "All" and selected_proc == "All":
-
         result = pd.DataFrame({
             "Procedure": df[procedure_col],
             "Status": df[selected_icb]
@@ -208,15 +197,8 @@ if page == "Policy Explorer":
             ]
 
         total = len(result)
-
-        fwc = len(
-            result[result["Status"] == "FWC"]
-        )
-
-        ifr = len(
-            result[result["Status"] == "IFR"]
-        )
-
+        fwc = len(result[result["Status"] == "FWC"])
+        ifr = len(result[result["Status"] == "IFR"])
         other = len(
             result[
                 result["Status"]
@@ -224,7 +206,6 @@ if page == "Policy Explorer":
                 "Other (Signpost / Under Review)"
             ]
         )
-
         none = len(
             result[
                 result["Status"]
@@ -234,25 +215,21 @@ if page == "Policy Explorer":
         )
 
         a, b, c, d = st.columns(4)
-
         a.metric(
             "FWC",
-            f"{fwc} ({round(fwc/total*100,1)}%)"
+            f"{fwc} ({round(fwc/total*100,1) if total > 0 else 0}%)"
         )
-
         b.metric(
             "IFR",
-            f"{ifr} ({round(ifr/total*100,1)}%)"
+            f"{ifr} ({round(ifr/total*100,1) if total > 0 else 0}%)"
         )
-
         c.metric(
             "Other",
-            f"{other} ({round(other/total*100,1)}%)"
+            f"{other} ({round(other/total*100,1) if total > 0 else 0}%)"
         )
-
         d.metric(
             "No Policy",
-            f"{none} ({round(none/total*100,1)}%)"
+            f"{none} ({round(none/total*100,1) if total > 0 else 0}%)"
         )
 
         st.dataframe(
@@ -261,7 +238,6 @@ if page == "Policy Explorer":
         )
 
     elif selected_icb != "All" and selected_proc != "All":
-
         row = df[
             df[procedure_col] == selected_proc
         ].iloc[0]
@@ -271,120 +247,16 @@ if page == "Policy Explorer":
         st.subheader(selected_proc)
 
         if value == "FWC":
-            st.success(
-                "✅ Funded With Criteria (FWC)"
-            )
-
+            st.success("✅ Funded With Criteria (FWC)")
         elif value == "IFR":
-            st.warning(
-                "⚠️ Individual Funding Request (IFR)"
-            )
-
+            st.warning("⚠️ Individual Funding Request (IFR)")
         elif value == "Other (Signpost / Under Review)":
-            st.info(
-                "ℹ️ Signpost to National Guidance / Under Review"
-            )
-
+            st.info("ℹ️ Signpost to National Guidance / Under Review")
         else:
-            st.error(
-                "❌ No Policy Listed"
-            )
+            st.error("❌ No Policy Listed")
 
 elif page == "National Dashboard":
 
-    elif page == "National Dashboard":
-
     show_only_variable = st.checkbox(
         "Show only procedures with variation between ICBs",
-        value=True
-    )
-
-    dashboard_df = var_df.copy()
-
-    if show_only_variable:
-
-        dashboard_df = dashboard_df[
-            (
-                (dashboard_df["FWC %"] > 0)
-                & (dashboard_df["FWC %"] < 100)
-            )
-            |
-            (
-                (dashboard_df["IFR %"] > 0)
-                & (dashboard_df["IFR %"] < 100)
-            )
-        ]
-
-    a, b, c, d, e, f = st.columns(6)
-
-    a.metric(
-        "Procedures",
-        len(var_df)
-    )
-
-    b.metric(
-        "ICBs",
-        len(icb_cols)
-    )
-
-    c.metric(
-        "Mean FWC %",
-        f"{round(var_df['FWC %'].mean(),1)}%"
-    )
-
-    d.metric(
-        "Mean IFR %",
-        f"{round(var_df['IFR %'].mean(),1)}%"
-    )
-
-    e.metric(
-        "Mean Other %",
-        f"{round(var_df['Other %'].mean(),1)}%"
-    )
-
-    f.metric(
-        "Mean No Policy %",
-        f"{round(var_df['No Policy %'].mean(),1)}%"
-    )
-
-    st.subheader("Highest IFR Procedures")
-
-    st.caption(
-        "Ranked by percentage of all 42 ICBs with an IFR policy. Procedures tied at the cut-off are included."
-    )
-
-    st.dataframe(
-        top_n_with_ties(
-            var_df,
-            "IFR %",
-            20
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
-
-    st.subheader("Highest FWC Procedures")
-
-    st.caption(
-        "Ranked by percentage of all 42 ICBs funding the procedure with criteria (FWC)."
-    )
-
-    st.dataframe(
-        var_df
-        .sort_values(
-            "FWC %",
-            ascending=False
-        )
-        .head(20),
-        use_container_width=True,
-        hide_index=True
-    )
-
-    st.subheader("All Procedures")
-
-    st.dataframe(
-        var_df
-        .sort_values("Procedure"),
-        use_container_width=True,
-        hide_index=True
-    )
+        value=False  # Changed to False so all 163 procedures show by
