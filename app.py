@@ -287,6 +287,8 @@ if page == "Policy Explorer":
 
 elif page == "National Dashboard":
 
+    elif page == "National Dashboard":
+
     show_only_variable = st.checkbox(
         "Show only procedures with variation between ICBs",
         value=True
@@ -297,16 +299,22 @@ elif page == "National Dashboard":
     if show_only_variable:
 
         dashboard_df = dashboard_df[
-            (dashboard_df["FWC %"] > 0)
-            &
-            (dashboard_df["FWC %"] < 100)
+            (
+                (dashboard_df["FWC %"] > 0)
+                & (dashboard_df["FWC %"] < 100)
+            )
+            |
+            (
+                (dashboard_df["IFR %"] > 0)
+                & (dashboard_df["IFR %"] < 100)
+            )
         ]
 
     a, b, c, d, e, f = st.columns(6)
 
     a.metric(
         "Procedures",
-        len(dashboard_df)
+        len(var_df)
     )
 
     b.metric(
@@ -316,22 +324,22 @@ elif page == "National Dashboard":
 
     c.metric(
         "Mean FWC %",
-        f"{round(dashboard_df['FWC %'].mean(),1)}%"
+        f"{round(var_df['FWC %'].mean(),1)}%"
     )
 
     d.metric(
         "Mean IFR %",
-        f"{round(dashboard_df['IFR %'].mean(),1)}%"
+        f"{round(var_df['IFR %'].mean(),1)}%"
     )
 
     e.metric(
         "Mean Other %",
-        f"{round(dashboard_df['Other %'].mean(),1)}%"
+        f"{round(var_df['Other %'].mean(),1)}%"
     )
 
     f.metric(
         "Mean No Policy %",
-        f"{round(dashboard_df['No Policy %'].mean(),1)}%"
+        f"{round(var_df['No Policy %'].mean(),1)}%"
     )
 
     st.subheader("Highest IFR Procedures")
@@ -342,11 +350,12 @@ elif page == "National Dashboard":
 
     st.dataframe(
         top_n_with_ties(
-            dashboard_df,
+            var_df,
             "IFR %",
             20
-        ).reset_index(drop=True),
-        use_container_width=True
+        ),
+        use_container_width=True,
+        hide_index=True
     )
 
     st.subheader("Highest FWC Procedures")
@@ -356,21 +365,21 @@ elif page == "National Dashboard":
     )
 
     st.dataframe(
-        dashboard_df
+        var_df
         .sort_values(
             "FWC %",
             ascending=False
         )
-        .head(20)
-        .reset_index(drop=True),
-        use_container_width=True
+        .head(20),
+        use_container_width=True,
+        hide_index=True
     )
 
     st.subheader("All Procedures")
 
     st.dataframe(
-        dashboard_df
-        .sort_values("Procedure")
-        .reset_index(drop=True),
-        use_container_width=True
+        var_df
+        .sort_values("Procedure"),
+        use_container_width=True,
+        hide_index=True
     )
