@@ -259,4 +259,22 @@ elif page == "National Dashboard":
 
     show_only_variable = st.checkbox(
         "Show only procedures with variation between ICBs",
-        value=False  # Changed to False so all 163 procedures show by
+        value=False
+    )
+
+    dashboard_df = var_df.copy()
+
+    # This 'if' block only runs if the checkbox is checked (True). 
+    # Since value=False, this code is skipped entirely and all 163 rows flow through!
+    if show_only_variable:
+        dashboard_df = dashboard_df[
+            (
+                (dashboard_df["FWC %"] > 0)
+                & (dashboard_df["FWC %"] < 100)
+            )
+            |
+            (
+                (dashboard_df["IFR %"] > 0)
+                & (dashboard_df["IFR %"] < 100)
+            )
+        ]
