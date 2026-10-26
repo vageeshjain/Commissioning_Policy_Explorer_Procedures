@@ -10,7 +10,8 @@ raw = pd.read_excel(
     sheet_name=0,
     header=0
 )
-
+st.write("RAW SHAPE", raw.shape)
+st.write(raw.head(20))
 procedure_col = raw.columns[0]
 
 count_cols = [
